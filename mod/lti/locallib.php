@@ -2041,13 +2041,18 @@ function lti_parse_custom_parameter($toolproxy, $tool, $params, $value, $islti2)
                     }
                 } else {
                     $val = $value;
-                    $services = lti_get_services();
-                    foreach ($services as $service) {
-                        $service->set_tool_proxy($toolproxy);
-                        $service->set_type($tool);
-                        $value = $service->parse_value($val);
-                        if ($val != $value) {
-                            break;
+                    // Trying to calculate the custom params
+                    // If not exist the function return null and to continue with the normal flow.
+                    $value = lti_calculate_custom_parameter($value1);
+                    if ($value == null) {
+                        $services = lti_get_services();
+                        foreach ($services as $service) {
+                            $service->set_tool_proxy($toolproxy);
+                            $service->set_type($tool);
+                            $value = $service->parse_value($val);
+                            if ($val != $value) {
+                                break;
+                            }
                         }
                     }
                 }
@@ -2084,6 +2089,20 @@ function lti_calculate_custom_parameter($value) {
             }
             $dt = new DateTime("@$COURSE->enddate", new DateTimeZone('UTC'));
             return $dt->format(DateTime::ATOM);
+    }
+
+    $valueinfo = explode('.', $value);
+    // If the value contain User, we try to find the property in the User fields or Profile fields.
+    if ($valueinfo[0] === 'User') {
+        $property = $valueinfo[1];
+        if (property_exists($USER, $property)) {
+            return empty($USER->{$property}) ? null : $USER->{$property};
+        }
+        // If the property doesn't exist in the User object, we try on to find it in the profile fields.
+        $profile = (object)profile_user_record($USER->id);
+        if (property_exists($profile, $property)) {
+            return empty($profile->{$property}) ? null : $profile->{$property};
+        }
     }
     return null;
 }
